@@ -1,0 +1,74 @@
+version: '3.7'
+
+networks:
+  fluentbit:
+    driver: bridge
+
+services:
+  nginx:
+    container_name: nginx
+    hostname: nginx
+    image: nginx:1.19.5
+    ports:
+      - 80:80
+    networks:
+      - fluentbit
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/logs:/var/log/nginx
+    restart: on-failure
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: elasticsearch:7.11.1
+    hostname: elasticsearch
+    environment:
+      - http.host=0.0.0.0
+      - discovery.type=single-node
+      - cluster.name=hive
+      - script.allowed_types= inline
+      - thread_pool.search.queue_size=100000
+      - thread_pool.write.queue_size=10000
+      - gateway.recover_after_nodes=1
+      - xpack.security.enabled=true
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
+      - ./elasticsearch/logs:/usr/share/elasticsearch/logs
+    networks:
+      - fluentbit
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.11.1
+    container_name: kibana
+    hostname: kibana
+    restart: always
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 5601:5601
+    volumes:
+      - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
+    networks:
+      - fluentbit
+
+  fluentbit:
+    image: fluent/fluent-bit:latest
+    container_name: fluentbit
+    hostname: fluentbit
+    restart: always
+    volumes:
+      - ./fluent/conf/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+      - ./fluent/logs:/fluent-bit/log
+      - ./fluent/db:/fluent-bit/db
+      - ./nginx/logs/access.log:/log/nginx/access.log
+    networks:
+      - fluentbit
+
